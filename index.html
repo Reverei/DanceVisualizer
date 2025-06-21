@@ -1,0 +1,704 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Modern Music Visualizer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script async src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- Import GLTFLoader and FBXLoader directly from the jsm modules. -->
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.module.min.js",
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.128.0/examples/jsm/"
+            }
+        }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap');
+
+        body {
+            font-family: 'Inter', sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #0a0a0a;
+            color: #e2e8f0;
+            overflow: hidden; /* Prevent scrollbars from the main layout */
+        }
+
+        /* Canvas now acts as a background */
+        #visualizerCanvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: block;
+            z-index: -1; /* Place it behind all other content */
+        }
+
+        /* Main container for controls at the bottom */
+        .controls-container {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            padding: 1rem;
+            box-sizing: border-box;
+            z-index: 10;
+        }
+
+        /* Glassmorphism panel for the controls */
+        .controls {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: center;
+            gap: 1rem;
+            background: rgba(20, 20, 22, 0.65); /* Semi-transparent background */
+            backdrop-filter: blur(12px) saturate(180%);
+            -webkit-backdrop-filter: blur(12px) saturate(180%);
+            padding: 1.25rem 1.5rem;
+            border-radius: 1.5rem; /* Larger border radius */
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.37);
+            width: 100%;
+            max-width: 800px; /* Increased max width for new dropdown */
+        }
+
+        /* Unified button/select/input styling */
+        .control-item {
+            height: 52px;
+            border-radius: 1rem;
+            border: none;
+            cursor: pointer;
+            font-size: 0.9rem;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            background-color: rgba(255, 255, 255, 0.1);
+            color: #f0f0f0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-grow: 1;
+        }
+
+        .control-item:hover {
+            background-color: rgba(255, 255, 255, 0.2);
+            transform: translateY(-2px);
+        }
+
+        #controlButton {
+            min-width: 52px;
+            flex-grow: 0; /* Don't let the play button grow */
+        }
+
+        #controlButton svg {
+            width: 24px;
+            height: 24px;
+            fill: #fff;
+        }
+
+        #pauseIcon {
+            display: none; /* Hidden by default */
+        }
+
+        select, input[type="text"] {
+            padding: 0 1rem;
+            text-align: center;
+            appearance: none;
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            background-image: url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23cccccc%22%20d%3D%22M287%2C197.3L159.2%2C69.5c-4.4-4.4-11.4-4.4-15.8%2C0L5.4%2C197.3c-4.4%2C4.4-4.4%2C11.4%2C0%2C15.8c4.4%2C4.4%2C11.4%2C4.4%2C15.8%2C0l130.5-130.6l130.5%2C130.6c4.4%2C4.4-4.4%2C11.4%2C15.8%2C0C291.4%2C208.7%2C291.4%2C201.7%2C287%2C197.3z%22%2F%3E%3C%2Fsvg%3E');
+            background-repeat: no-repeat;
+            background-position: right 1rem center;
+            background-size: 0.8em;
+            padding-right: 2.5rem;
+        }
+
+        select:focus, input[type="text"]:focus {
+            outline: 2px solid rgba(59, 130, 246, 0.5);
+            outline-offset: 2px;
+        }
+        
+        /* Modern Toggle Switch */
+        .toggle-switch {
+            width: 180px;
+            min-width: 180px;
+            height: 52px;
+            position: relative;
+            flex-grow: 1;
+        }
+        .toggle-switch input { opacity: 0; width: 0; height: 0; }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-color: rgba(255, 255, 255, 0.1);
+            transition: .4s;
+            border-radius: 1rem;
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: calc(100% - 8px);
+            width: calc(50% - 4px);
+            left: 4px;
+            bottom: 4px;
+            background-color: #2563eb;
+            transition: .4s;
+            border-radius: 0.75rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+        }
+        
+        input:checked + .slider:before {
+            transform: translateX(100%);
+        }
+        
+        .slider-labels {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            display: flex;
+            align-items: center;
+            justify-content: space-around;
+            color: #f0f0f0;
+            font-size: 0.9rem;
+            font-weight: 500;
+            pointer-events: none;
+        }
+        
+        .slider-labels span {
+            flex-basis: 50%;
+            text-align: center;
+        }
+
+        /* Message Box */
+        #message-box {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: #2563eb;
+            color: white;
+            padding: 1rem 1.5rem;
+            border-radius: 1rem;
+            text-align: center;
+            display: none;
+            width: 90%;
+            max-width: 500px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+            z-index: 20;
+            border: 1px solid rgba(255,255,255,0.1);
+            backdrop-filter: blur(5px);
+        }
+        #message-box.error {
+            background-color: #e53e3e;
+        }
+
+        /* Responsive adjustments */
+        @media (max-width: 768px) {
+            .controls {
+                flex-direction: column;
+                padding: 1rem;
+                gap: 0.75rem;
+            }
+            .control-item, .toggle-switch, #modelSelect, #animationSelect {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <canvas id="visualizerCanvas"></canvas>
+
+    <div class="controls-container">
+        <div class="controls">
+            <button id="controlButton" class="control-item">
+                <svg id="playIcon" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"></path></svg>
+                <svg id="pauseIcon" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"></path></svg>
+            </button>
+            
+            <label class="toggle-switch">
+                <input type="checkbox" id="audioSourceToggle">
+                <span class="slider"></span>
+                <div class="slider-labels">
+                    <span>Demo</span>
+                    <span>Mic</span>
+                </div>
+            </label>
+
+            <select id="modelSelect" class="control-item">
+                <option value="https://reverei.github.io/DanceVisualizer/Dancing%20Twerk.fbx">Model 1</option>
+                <option value="https://reverei.github.io/models/Samba.fbx">Samba Model</option>
+            </select>
+
+            <!-- NEW: Animation selection dropdown -->
+            <select id="animationSelect" class="control-item" style="display: none;"></select>
+        </div>
+    </div>
+
+    <div id="message-box"></div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+        import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
+
+        // --- Global Variables ---
+        let scene, camera, renderer, character;
+        let audioAnalyser, audioContext, microphoneStreamSource, demoAudioElement;
+        let animationFrameId;
+        let modelMixer, activeAction;
+        const clock = new THREE.Clock();
+
+        const visualizerBars = [];
+        let barMaterial;
+        const numberOfBars = 64;
+        const barWidth = 0.2;
+        const maxBarHeight = 5;
+        const soundThreshold = 0.05;
+
+        // --- DOM Elements ---
+        const canvas = document.getElementById('visualizerCanvas');
+        const controlButton = document.getElementById('controlButton');
+        const playIcon = document.getElementById('playIcon');
+        const pauseIcon = document.getElementById('pauseIcon');
+        const audioSourceToggle = document.getElementById('audioSourceToggle');
+        const modelSelect = document.getElementById('modelSelect');
+        const animationSelect = document.getElementById('animationSelect'); // NEW
+        const messageBox = document.getElementById('message-box');
+        
+        // --- Configuration ---
+        const demoTrackURL = "https://reverei.github.io/DanceVisualizer/Train.mp3";
+        let currentAudioSourceType = 'demoTrack';
+        let isMicrophoneActive = false;
+        let isVisualizing = false;
+
+        // --- Functions ---
+
+        function showMessage(message, isError = false) {
+            messageBox.textContent = message;
+            messageBox.className = 'message-box';
+            if (isError) {
+                messageBox.classList.add('error');
+            }
+            messageBox.style.display = 'block';
+            
+            setTimeout(() => {
+                messageBox.style.display = 'none';
+            }, 5000);
+        }
+
+        function initThreeJS() {
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, alpha: true });
+            renderer.setClearColor(0x000000, 0);
+
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+            camera.position.set(0, 2.5, 5);
+            camera.lookAt(0, 1, 0);
+
+            // --- LIGHTING SETUP ---
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.2);
+            scene.add(ambientLight);
+
+            const mainSpotLight = new THREE.SpotLight(0xffffff, 1.35, 20, Math.PI / 4, 0.3, 2);
+            mainSpotLight.position.set(0, 8, 2);
+            mainSpotLight.castShadow = true;
+            mainSpotLight.shadow.mapSize.width = 1024;
+            mainSpotLight.shadow.mapSize.height = 1024;
+            scene.add(mainSpotLight);
+
+            const fillLight = new THREE.SpotLight(0xffffff, 0.9, 20, Math.PI / 3, 0.5, 2);
+            fillLight.position.set(0, 3, 5); 
+            fillLight.target.position.set(0, 1.5, 0);
+            scene.add(fillLight.target);
+            scene.add(fillLight); 
+
+            const backLightColor = 0xFFF7E0;
+            const backLightPositions = [-3, 3, 0];
+            
+            for(let i=0; i<3; i++) {
+                const backLight = new THREE.SpotLight(backLightColor, 1.5, 25, Math.PI / 6, 0.5, 2);
+                backLight.position.set(backLightPositions[i], 3, -6);
+                backLight.target.position.set(0, 1, 0);
+                scene.add(backLight.target);
+                backLight.castShadow = true;
+                scene.add(backLight);
+            }
+
+            // --- SCENE OBJECTS ---
+            const floorGeometry = new THREE.PlaneGeometry(30, 30);
+            const floorMaterial = new THREE.MeshStandardMaterial({ 
+                color: 0x111111, 
+                metalness: 0.1, 
+                roughness: 0.4 
+            });
+            const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+            floor.rotation.x = -Math.PI / 2;
+            floor.position.y = 0;
+            floor.receiveShadow = true;
+            scene.add(floor);
+
+            createVisualizerBars();
+            loadModel(modelSelect.value);
+
+            window.addEventListener('resize', onWindowResize, false);
+            
+            audioSourceToggle.checked = false;
+            currentAudioSourceType = 'demoTrack';
+            showMessage("Ready to jam! Press Play", false);
+        }
+
+        function createVisualizerBars() {
+            barMaterial = new THREE.MeshStandardMaterial({
+                color: 0x555555,
+                metalness: 0.1,
+                roughness: 0.5
+            });
+            
+            const radius = 1.2;
+
+            for (let i = 0; i < numberOfBars; i++) {
+                const geometry = new THREE.BoxGeometry(barWidth, 0.1, barWidth);
+                
+                const angle = (i / numberOfBars) * Math.PI * 2;
+                const x = radius * Math.cos(angle);
+                const z = radius * Math.sin(angle);
+
+                const growthDirection = (z < 0) ? 'up' : 'out';
+                
+                if (growthDirection === 'up') {
+                    geometry.translate(0, 0.1 / 2, 0); 
+                } else {
+                    geometry.translate(0, 0.1 / 2, -barWidth / 2);
+                }
+
+                const bar = new THREE.Mesh(geometry, barMaterial);
+                bar.position.set(x, 0, z);
+                
+                bar.lookAt(0, 0, 0);
+
+                bar.userData.growthDirection = growthDirection;
+                bar.castShadow = true;
+                bar.receiveShadow = true;
+                scene.add(bar);
+                visualizerBars.push(bar);
+            }
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        async function setupMicrophoneAudio() {
+            if (audioContext) { audioContext.close(); }
+            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                microphoneStreamSource = audioContext.createMediaStreamSource(stream); 
+                audioAnalyser = audioContext.createAnalyser();
+                audioAnalyser.fftSize = 256;
+                microphoneStreamSource.connect(audioAnalyser);
+                isMicrophoneActive = true;
+                currentAudioSourceType = 'hotMic';
+                showMessage("Microphone active!", false);
+                if (!animationFrameId) { animate(); }
+            } catch (error) {
+                console.error("Error accessing microphone:", error);
+                showMessage("Error: Could not access microphone.", true);
+                isMicrophoneActive = false;
+                setPausedState();
+            }
+        }
+
+        async function setupDemoTrackAudio(url) {
+            if (audioContext) { audioContext.close(); }
+            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            
+            if (demoAudioElement && demoAudioElement.audioSourceNode) {
+                demoAudioElement.audioSourceNode.disconnect();
+                demoAudioElement.audioSourceNode = null;
+            }
+            if (demoAudioElement) { demoAudioElement.pause(); demoAudioElement.src = ''; }
+            else { demoAudioElement = new Audio(); }
+            
+            demoAudioElement.src = url;
+            demoAudioElement.crossOrigin = 'anonymous';
+
+            demoAudioElement.onended = () => {
+                setPausedState();
+                showMessage("Demo track ended.", false);
+            };
+
+            audioAnalyser = audioContext.createAnalyser();
+            audioAnalyser.fftSize = 256;
+            const source = audioContext.createMediaElementSource(demoAudioElement);
+            demoAudioElement.audioSourceNode = source;
+            source.connect(audioAnalyser);
+            audioAnalyser.connect(audioContext.destination);
+
+            currentAudioSourceType = 'demoTrack';
+            isMicrophoneActive = false;
+            
+            if (!animationFrameId) { animate(); }
+        }
+        
+        /**
+         * NEW: Sets a new animation as the active one, with a smooth fade transition.
+         * @param {string} name The name of the animation to play.
+         */
+        function setActiveAnimation(name) {
+            if (!character || !character.animations) return;
+            
+            const previousAction = activeAction;
+            activeAction = character.animations[name];
+
+            if (previousAction && previousAction !== activeAction) {
+                previousAction.fadeOut(0.5);
+            }
+            
+            activeAction
+                .reset()
+                .setEffectiveTimeScale(1)
+                .setEffectiveWeight(1)
+                .fadeIn(0.5)
+                .play();
+        }
+
+        async function loadModel(sourceUrl) {
+            showMessage(`Loading model...`, false);
+            let loader, animations, modelExtension; 
+
+            const urlParts = sourceUrl.split('?')[0].split('.');
+            modelExtension = urlParts[urlParts.length - 1].toLowerCase();
+            
+            if (modelExtension === 'gltf' || modelExtension === 'glb') { loader = new GLTFLoader(); }
+            else if (modelExtension === 'fbx') { loader = new FBXLoader(); }
+            else {
+                showMessage(`Unsupported model format: .${modelExtension}.`, true);
+                if (character) scene.remove(character);
+                if (modelMixer) modelMixer.stopAllAction();
+                return;
+            }
+
+            if (character) scene.remove(character);
+            if (modelMixer) { modelMixer.stopAllAction(); modelMixer.uncacheRoot(modelMixer.getRoot()); }
+            character = null;
+            modelMixer = null;
+            activeAction = null;
+
+            try {
+                const loadedObject = await loader.loadAsync(sourceUrl);
+                character = modelExtension === 'fbx' ? loadedObject : loadedObject.scene;
+                animations = loadedObject.animations;
+                
+                character.isStickFigure = false;
+                character.traverse(child => { if (child.isMesh) { child.castShadow = true; child.receiveShadow = true; }});
+                scene.add(character);
+
+                const maxDim = Math.max(...new THREE.Box3().setFromObject(character).getSize(new THREE.Vector3()).toArray());
+                const scaleFactor = 2 / maxDim;
+                character.scale.set(scaleFactor, scaleFactor, scaleFactor);
+                
+                const postScaleBbox = new THREE.Box3().setFromObject(character);
+                character.position.y = -postScaleBbox.min.y;
+                character.bbox = postScaleBbox; 
+
+                animationSelect.innerHTML = ''; // Clear previous animations
+                if (animations && animations.length > 0) {
+                    modelMixer = new THREE.AnimationMixer(character);
+                    character.animations = {}; // Use an object for easier access
+                    
+                    animations.forEach(clip => {
+                        const action = modelMixer.clipAction(clip);
+                        character.animations[clip.name] = action;
+
+                        // Populate the dropdown
+                        const option = document.createElement('option');
+                        option.value = clip.name;
+                        option.innerText = clip.name;
+                        animationSelect.appendChild(option);
+                    });
+                    
+                    // Set the first animation as the default active one
+                    setActiveAnimation(animations[0].name);
+
+                    // Show or hide the dropdown based on animation count
+                    animationSelect.style.display = animations.length > 1 ? 'flex' : 'none';
+                    
+                    showMessage(`Model loaded successfully!`, false);
+                } else {
+                    animationSelect.style.display = 'none';
+                    showMessage(`Model loaded, but no animations found.`, false);
+                }
+            } catch (error) {
+                console.error('Error loading model from URL:', error);
+                showMessage(`Error loading model. Check console for details.`, true);
+            }
+        }
+        
+        function setPlayingState() {
+            isVisualizing = true;
+            playIcon.style.display = 'none';
+            pauseIcon.style.display = 'block';
+
+            if (modelMixer && activeAction) {
+                modelMixer.timeScale = 1;
+            }
+        }
+
+        function setPausedState() {
+            isVisualizing = false;
+            playIcon.style.display = 'block';
+            pauseIcon.style.display = 'none';
+
+            if (currentAudioSourceType === 'demoTrack' && demoAudioElement) {
+                demoAudioElement.pause();
+            } else if (currentAudioSourceType === 'hotMic' && audioContext?.state === 'running') {
+                audioContext.suspend();
+            }
+
+            if (modelMixer) modelMixer.timeScale = 0;
+            
+            visualizerBars.forEach(bar => {
+                if (bar.userData.growthDirection === 'up') {
+                    bar.scale.y = 0.01 / bar.geometry.parameters.height;
+                } else { 
+                    bar.scale.z = 0.01 / bar.geometry.parameters.depth;
+                }
+            });
+        }
+
+        // --- Event Listeners ---
+        controlButton.addEventListener('click', async () => {
+            if (!isVisualizing) {
+                if (!audioContext || audioContext.state === 'closed') {
+                    if (currentAudioSourceType === 'hotMic') await setupMicrophoneAudio();
+                    else await setupDemoTrackAudio(demoTrackURL);
+                }
+
+                if (audioContext?.state === 'suspended') {
+                    await audioContext.resume();
+                }
+
+                if (currentAudioSourceType === 'demoTrack' && demoAudioElement) {
+                   demoAudioElement.play().catch(e => {
+                        showMessage("Could not play audio.", true);
+                        setPausedState();
+                        return;
+                    });
+                }
+                setPlayingState();
+
+            } else {
+                setPausedState();
+            }
+        });
+
+        modelSelect.addEventListener('change', async () => {
+            const selectedUrl = modelSelect.value;
+            setPausedState();
+            await loadModel(selectedUrl);
+        });
+        
+        // NEW: Event listener for the animation dropdown
+        animationSelect.addEventListener('change', () => {
+            setActiveAnimation(animationSelect.value);
+        });
+
+        audioSourceToggle.addEventListener('change', async () => {
+            setPausedState();
+            if (audioContext) await audioContext.close();
+
+            if (audioSourceToggle.checked) {
+                currentAudioSourceType = 'hotMic';
+                showMessage("Switched to Microphone. Press Play to start.", false);
+            } else {
+                currentAudioSourceType = 'demoTrack';
+                showMessage("Switched to Demo Track. Press Play.", false);
+            }
+        });
+
+        function animate() {
+            animationFrameId = requestAnimationFrame(animate);
+            const delta = clock.getDelta();
+            const time = clock.elapsedTime;
+
+            let normalizedAmplitude = 0;
+            if (audioAnalyser && audioContext?.state === 'running') {
+                const dataArray = new Uint8Array(audioAnalyser.frequencyBinCount);
+                audioAnalyser.getByteFrequencyData(dataArray);
+                
+                let sum = 0;
+                for (let i = 0; i < dataArray.length; i++) { sum += dataArray[i]; }
+                const average = sum / dataArray.length; 
+                normalizedAmplitude = average / 255;
+            }
+
+            // Update visualizer bars
+            if (isVisualizing && normalizedAmplitude > soundThreshold) {
+                const bufferLength = audioAnalyser.frequencyBinCount;
+                const dataArrayBars = new Uint8Array(bufferLength);
+                audioAnalyser.getByteFrequencyData(dataArrayBars);
+                for (let i = 0; i < numberOfBars; i++) {
+                    const bar = visualizerBars[i];
+                    const barHeight = dataArrayBars[i] / 255 * maxBarHeight; 
+                    const finalHeight = Math.max(0.01, barHeight);
+
+                    if (bar.userData.growthDirection === 'up') {
+                        bar.scale.y = finalHeight / bar.geometry.parameters.height;
+                    } else { 
+                        bar.scale.z = finalHeight / bar.geometry.parameters.depth;
+                    }
+                }
+            } else {
+                visualizerBars.forEach(bar => {
+                    if (bar.userData.growthDirection === 'up') {
+                        bar.scale.y = Math.max(0.01 / bar.geometry.parameters.height, bar.scale.y * 0.95);
+                    } else { 
+                        bar.scale.z = Math.max(0.01 / bar.geometry.parameters.depth, bar.scale.z * 0.95);
+                    }
+                });
+            }
+
+            // Update character animation
+            if (modelMixer) {
+                // Keep mixer updating even when paused to handle fading
+                if(isVisualizing) {
+                    modelMixer.timeScale = 0.5 + normalizedAmplitude * 2.0;
+                }
+                modelMixer.update(delta);
+            }
+
+            if (isVisualizing && character) {
+                 const bobbingHeight = normalizedAmplitude * 0.05;
+                 if (character.bbox) {
+                    character.position.y = -character.bbox.min.y + (Math.sin(time * 5) * 0.5 + 0.5) * bobbingHeight;
+                 }
+                 character.rotation.y += (0.001 + normalizedAmplitude * 0.005);
+            }
+            
+            renderer.render(scene, camera);
+        }
+
+        // --- Initial Load ---
+        window.onload = function() {
+            initThreeJS();
+            setupDemoTrackAudio(demoTrackURL); 
+            animate(); 
+        };
+    </script>
+</body>
+</html>
