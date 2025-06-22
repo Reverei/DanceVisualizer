@@ -268,7 +268,7 @@
         
         // --- Configuration ---
         const demoTrackURL = "https://reverei.github.io/DanceVisualizer/Train.mp3";
-        const modelUrl = "https://Reverei.github.io/DanceVisualizer/AllDancesModel1.glb";
+        const modelUrl = "https://Reverei.github.io/DanceVisualizer/Animation%20Alignment%20Session%20for%20Model1v3.glb";
         let currentAudioSourceType = 'demoTrack';
         let isMicrophoneActive = false;
         let isVisualizing = false;
@@ -533,7 +533,6 @@
                         animationSelect.appendChild(option);
                     });
                     
-                    // FIXED: Set default animation dynamically
                     setActiveAnimation(animations[0].name);
 
                     animationSelect.style.display = animations.length > 1 ? 'flex' : 'none';
@@ -555,7 +554,6 @@
 
             if (modelMixer && activeAction) {
                 modelMixer.timeScale = 1;
-                // FIXED: Set play animation dynamically
                 const animations = Object.keys(character.animations);
                 const playAnimationName = animations[1] || animations[0];
                 setActiveAnimation(playAnimationName);
@@ -575,7 +573,6 @@
 
             if (modelMixer) {
                 modelMixer.timeScale = 0;
-                // FIXED: Set idle animation dynamically
                 const idleAnimationName = Object.keys(character.animations)[0];
                 setActiveAnimation(idleAnimationName);
             }
