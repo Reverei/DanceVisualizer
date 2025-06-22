@@ -24,10 +24,9 @@
             padding: 0;
             background-color: #0a0a0a;
             color: #e2e8f0;
-            overflow: hidden; /* Prevent scrollbars from the main layout */
+            overflow: hidden;
         }
 
-        /* Canvas now acts as a background */
         #visualizerCanvas {
             position: fixed;
             top: 0;
@@ -35,10 +34,9 @@
             width: 100%;
             height: 100%;
             display: block;
-            z-index: -1; /* Place it behind all other content */
+            z-index: -1;
         }
 
-        /* Main container for controls at the bottom */
         .controls-container {
             position: fixed;
             bottom: 0;
@@ -51,25 +49,23 @@
             z-index: 10;
         }
 
-        /* Glassmorphism panel for the controls */
         .controls {
             display: flex;
             flex-wrap: wrap;
             align-items: center;
             justify-content: center;
             gap: 1rem;
-            background: rgba(20, 20, 22, 0.65); /* Semi-transparent background */
+            background: rgba(20, 20, 22, 0.65);
             backdrop-filter: blur(12px) saturate(180%);
             -webkit-backdrop-filter: blur(12px) saturate(180%);
             padding: 1.25rem 1.5rem;
-            border-radius: 1.5rem; /* Larger border radius */
+            border-radius: 1.5rem;
             border: 1px solid rgba(255, 255, 255, 0.1);
             box-shadow: 0 8px 32px rgba(0, 0, 0, 0.37);
             width: 100%;
             max-width: 800px;
         }
 
-        /* Unified button/select/input styling */
         .control-item {
             height: 52px;
             border-radius: 1rem;
@@ -93,7 +89,7 @@
 
         #controlButton {
             min-width: 52px;
-            flex-grow: 0; /* Don't let the play button grow */
+            flex-grow: 0;
         }
 
         #controlButton svg {
@@ -103,7 +99,7 @@
         }
 
         #pauseIcon {
-            display: none; /* Hidden by default */
+            display: none;
         }
 
         select, input[type="text"] {
@@ -124,7 +120,6 @@
             outline-offset: 2px;
         }
         
-        /* Modern Toggle Switch */
         .toggle-switch {
             width: 180px;
             min-width: 180px;
@@ -177,7 +172,6 @@
             text-align: center;
         }
 
-        /* Message Box */
         #message-box {
             position: fixed;
             top: 20px;
@@ -200,7 +194,6 @@
             background-color: #e53e3e;
         }
 
-        /* Responsive adjustments */
         @media (max-width: 768px) {
             .controls {
                 flex-direction: column;
@@ -241,10 +234,9 @@
     <script type="module">
         import * as THREE from 'three';
         import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-        import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
 
         // --- Global Variables ---
-        let scene, camera, renderer, character;
+        let scene, camera, renderer, character, dynamicLight;
         let audioAnalyser, audioContext, microphoneStreamSource, demoAudioElement;
         let animationFrameId;
         let modelMixer, activeAction;
@@ -254,7 +246,7 @@
         let barMaterial;
         const numberOfBars = 64;
         const barWidth = 0.2;
-        const maxBarHeight = 3;
+        const maxBarHeight = 2.4;
         const soundThreshold = 0.05;
 
         // --- DOM Elements ---
@@ -298,31 +290,35 @@
             renderer.shadowMap.enabled = true;
             renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
-            camera.position.set(0, 2.5, 5);
+            camera.position.set(0, 1.5, 3.4);
             camera.lookAt(0, 1, 0);
 
             // --- LIGHTING SETUP ---
-            const ambientLight = new THREE.AmbientLight(0xffffff, 0.2);
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.65); 
             scene.add(ambientLight);
 
-            const mainSpotLight = new THREE.SpotLight(0xffffff, 1.35, 20, Math.PI / 4, 0.3, 2);
+            const mainSpotLight = new THREE.SpotLight(0xffffff, 1.0, 20, Math.PI / 4, 0.3, 2);
             mainSpotLight.position.set(0, 8, 2);
             mainSpotLight.castShadow = true;
             mainSpotLight.shadow.mapSize.width = 1024;
             mainSpotLight.shadow.mapSize.height = 1024;
             scene.add(mainSpotLight);
 
-            const fillLight = new THREE.SpotLight(0xffffff, 0.9, 20, Math.PI / 3, 0.5, 2);
+            const fillLight = new THREE.SpotLight(0xffffff, 0.7, 20, Math.PI / 3, 0.5, 2);
             fillLight.position.set(0, 3, 5); 
             fillLight.target.position.set(0, 1.5, 0);
             scene.add(fillLight.target);
             scene.add(fillLight); 
 
+            dynamicLight = new THREE.PointLight(0xfff7e0, 0, 10, 2);
+            dynamicLight.position.set(0, 2, 2.5);
+            scene.add(dynamicLight);
+
             const backLightColor = 0xFFF7E0;
             const backLightPositions = [-3, 3, 0];
             
             for(let i=0; i<3; i++) {
-                const backLight = new THREE.SpotLight(backLightColor, 1.5, 25, Math.PI / 6, 0.5, 2);
+                const backLight = new THREE.SpotLight(backLightColor, 1.0, 25, Math.PI / 6, 0.5, 2);
                 backLight.position.set(backLightPositions[i], 3, -6);
                 backLight.target.position.set(0, 1, 0);
                 scene.add(backLight.target);
@@ -357,7 +353,9 @@
             barMaterial = new THREE.MeshStandardMaterial({
                 color: 0x555555,
                 metalness: 0.1,
-                roughness: 0.5
+                roughness: 0.5,
+                transparent: true,
+                opacity: 0.3
             });
             
             const radius = 1.2;
@@ -519,7 +517,7 @@
 
                 animationSelect.innerHTML = ''; 
                 if (animations && animations.length > 0) {
-                    console.log('Found animations:', animations.map(a => a.name)); // Debugging log
+                    console.log('Found animations:', animations.map(a => a.name));
                     modelMixer = new THREE.AnimationMixer(character);
                     character.animations = {};
                     
@@ -645,6 +643,16 @@
                 normalizedAmplitude = average / 255;
             }
 
+            // Update dynamic light intensity
+            if (dynamicLight) {
+                if(isVisualizing) {
+                    dynamicLight.intensity = normalizedAmplitude * 2.5; // Pulse with the music
+                } else {
+                    dynamicLight.intensity *= 0.95; // Smoothly fade out
+                }
+            }
+
+
             // Update visualizer bars
             if (isVisualizing && normalizedAmplitude > soundThreshold) {
                 const bufferLength = audioAnalyser.frequencyBinCount;
@@ -654,6 +662,10 @@
                     const bar = visualizerBars[i];
                     const barHeight = dataArrayBars[i] / 255 * maxBarHeight; 
                     const finalHeight = Math.max(0.01, barHeight);
+                    
+                    const progress = (finalHeight - 0.01) / (maxBarHeight - 0.01);
+                    const newWidthScale = 0.5 + (1.15 - 0.5) * progress;
+                    bar.scale.x = newWidthScale;
 
                     if (bar.userData.growthDirection === 'up') {
                         bar.scale.y = finalHeight / bar.geometry.parameters.height;
@@ -668,6 +680,10 @@
                     } else { 
                         bar.scale.z = Math.max(0.01 / bar.geometry.parameters.depth, bar.scale.z * 0.95);
                     }
+                    // Also decay the width
+                    const currentHeight = (bar.userData.growthDirection === 'up' ? bar.scale.y : bar.scale.z) * bar.geometry.parameters.height;
+                    const progress = (currentHeight - 0.01) / (maxBarHeight - 0.01);
+                    bar.scale.x = 0.5 + (1.15 - 0.5) * progress;
                 });
             }
 
